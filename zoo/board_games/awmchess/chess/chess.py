@@ -47,14 +47,14 @@ class Chess(ChessBoard):
     def get_current_player(self):
         return self.current_player
 
-    def reset(self, reset_player):
+    def reset(self, reset_player=1):
         self.init_point_status()
         self.current_player = reset_player
         self.last_action = (-1, -1)
 
-        return self.get_current_obs()
+        return self.get_observation()
 
-    def get_current_obs(self):
+    def get_observation(self):
         return board_to_torch_state(self.get_board(), self.get_current_player(), self.last_action)
 
     def get_action_mask(self):
@@ -64,15 +64,18 @@ class Chess(ChessBoard):
             ret_mask[MOVE_TO_INDEX_DICT[move]] = 1
         return ret_mask
 
+    def get_numpy_mask(self):
+        return self.get_action_mask().cpu().numpy()
+
     def step(self, action):
         exe_player = self.get_current_player()
         self.do_action(action)
         winner = self.check_winner()
         if winner is None:
-            return self.get_current_obs(), 0, False, {}
+            return self.get_observation(), 0, False, {}
 
         rew = 1 if winner == exe_player else -1
-        return self.get_current_obs(), rew, True, {}
+        return self.get_observation(), rew, True, {}
 
 
 if __name__ == '__main__':

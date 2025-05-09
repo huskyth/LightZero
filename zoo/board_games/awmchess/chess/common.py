@@ -180,6 +180,7 @@ MAP_PATH = str(ROOT_PATH / 'chess/data/pointPos.txt')
 MODEL_SAVE_PATH = ROOT_PATH / "temp"
 create_directory(MODEL_SAVE_PATH)
 
+bg_image = cv2.imread(str(ROOT_PATH / 'chess/data/watermelon.png'))
 DISTANCE = get_distance()
 GAME_MAP = get_map()
 MOVE_TO_INDEX_DICT = {}
@@ -209,8 +210,8 @@ def fix_xy(target):
     return x, y
 
 
-def draw_chessmen(point_status, image, is_write, name):
-    image = copy.deepcopy(image)
+def draw_chessmen(point_status, is_write, name, is_show):
+    image = copy.deepcopy(bg_image)
     for index, point in enumerate(point_status):
         if point == 0:
             continue
@@ -221,6 +222,9 @@ def draw_chessmen(point_status, image, is_write, name):
             draw_circle(image, x, y, (255, 255, 255))
     if is_write:
         write_image(name, image)
+    if is_show:
+        cv2.imshow(name, image)
+        cv2.waitKey(0)
     return image
 
 
@@ -230,6 +234,7 @@ if not os.path.exists(str(ANALYSIS_PATH)):
     create_directory(ANALYSIS_PATH)
 
 ACTION_SPACE = len(MOVE_LIST)
+
 
 def draw_chessman_from_image(image_tensor, player, name):
     left, right = image_tensor[0][0], image_tensor[0][1]

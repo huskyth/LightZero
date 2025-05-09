@@ -201,3 +201,7 @@ class WMChessGUI:
                 pygame.draw.circle(self.screen, (255, 0, 0),
                                    (int(x + CHESSMAN_WIDTH / 2), int(y + CHESSMAN_HEIGHT / 2)),
                                    int(CHESSMAN_HEIGHT // 2 * 1.5))
+
+if __name__ == '__main__':
+    wm = WMChessGUI(None)
+    wm.loop()
