@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Callable
+from typing import Optional, Callable, Union, List, Tuple
 
 import psutil
 import torch
@@ -26,7 +26,7 @@ def ddp_synchronize():
     if is_ddp_enabled():
         dist.barrier()
 
-def ddp_all_reduce_sum(tensor):
+def ddp_all_reduce_sum(tensor: torch.Tensor) -> torch.Tensor:
     """
     Perform an all-reduce operation (sum) on the given tensor across
     all processes in DDP mode. Returns the reduced tensor.
@@ -41,7 +41,7 @@ def ddp_all_reduce_sum(tensor):
         dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
     return tensor
 
-def calculate_update_per_collect(cfg, new_data):
+def calculate_update_per_collect(cfg: 'EasyDict', new_data: List[List[torch.Tensor]], world_size: int = 1) -> int:
     """
     Calculate the number of updates to perform per data collection in a
     Distributed Data Parallel (DDP) setting. This ensures that all GPUs
@@ -49,7 +49,8 @@ def calculate_update_per_collect(cfg, new_data):
 
     Arguments:
         - cfg: Configuration object containing policy settings.
-        - new_data (list): The newly collected data segments.
+        - new_data (List[List[torch.Tensor]]): The newly collected data segments.
+        - world_size (int): The total number of processes.
 
     Returns:
         - int: The number of updates to perform per collection.
@@ -68,7 +69,7 @@ def calculate_update_per_collect(cfg, new_data):
             for game_segment in new_data[0]
         )
 
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and world_size > 1:
             # Convert the collected transitions count to a GPU tensor for DDP operations.
             collected_transitions_tensor = torch.tensor(
                 collected_transitions_num, dtype=torch.int64, device='cuda'
@@ -90,23 +91,23 @@ def calculate_update_per_collect(cfg, new_data):
 
     return update_per_collect
 
-def initialize_zeros_batch(observation_shape, batch_size, device):
+def initialize_zeros_batch(observation_shape: Union[int, List[int], Tuple[int]], batch_size: int, device: str) -> torch.Tensor:
     """
     Overview:
         Initialize a zeros tensor for batch observations based on the shape. This function is used to initialize the UniZero model input.
     Arguments:
-        - observation_shape (:obj:`Union[int, List[int]]`): The shape of the observation tensor.
+        - observation_shape (:obj:`Union[int, List[int], Tuple[int]]`): The shape of the observation tensor.
         - batch_size (:obj:`int`): The batch size.
         - device (:obj:`str`): The device to store the tensor.
     Returns:
         - zeros (:obj:`torch.Tensor`): The zeros tensor.
     """
-    if isinstance(observation_shape, list):
+    if isinstance(observation_shape, (list, tuple)):
         shape = [batch_size, *observation_shape]
     elif isinstance(observation_shape, int):
         shape = [batch_size, observation_shape]
     else:
-        raise TypeError("observation_shape must be either an int or a list")
+        raise TypeError(f"observation_shape must be either an int, a list, or a tuple, but got {type(observation_shape).__name__}")
 
     return torch.zeros(shape).to(device)
 

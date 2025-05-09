@@ -11,6 +11,7 @@ from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_r
     allreduce_data
 from ding.worker.collector.base_serial_collector import ISerialCollector
 from torch.nn import L1Loss
+import torch.distributed as dist
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
@@ -360,6 +361,12 @@ class MuZeroCollector(ISerialCollector):
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+        timestep_dict = {}
+        for i in range(env_nums):
+            if 'timestep' not in init_obs[i]:
+                print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+            timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
+
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
@@ -420,8 +427,12 @@ class MuZeroCollector(ISerialCollector):
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
+                timestep_dict = {env_id: timestep_dict[env_id] for env_id in ready_env_id}
+                
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
+                timestep = [timestep_dict[env_id] for env_id in ready_env_id]
+                
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
 
@@ -434,12 +445,15 @@ class MuZeroCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
 
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                timestep_dict_with_env_id = {
+                        k: v['timestep'] if 'timestep' in v else -1 for k, v in policy_output.items()
+                }
 
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_with_env_id = {
@@ -461,6 +475,7 @@ class MuZeroCollector(ISerialCollector):
                 actions = {}
                 value_dict = {}
                 pred_value_dict = {}
+                timestep_dict = {}
 
                 if not collect_with_pure_policy:
                     distributions_dict = {}
@@ -478,6 +493,7 @@ class MuZeroCollector(ISerialCollector):
                     actions[env_id] = actions_with_env_id.pop(env_id)
                     value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
+                    timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -498,17 +514,17 @@ class MuZeroCollector(ISerialCollector):
 
             interaction_duration = self._timer.value / len(timesteps)
 
-            for env_id, timestep in timesteps.items():
+            for env_id, episode_timestep in timesteps.items():
                 with self._timer:
-                    if timestep.info.get('abnormal', False):
-                        # If there is an abnormal timestep, reset all the related variables(including this env).
+                    if episode_timestep.info.get('abnormal', False):
+                        # If there is an abnormal episode_timestep, reset all the related variables(including this env).
                         # suppose there is no reset param, reset this env
                         self._env.reset({env_id: None})
                         self._policy.reset([env_id])
                         self._reset_stat(env_id)
-                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, timestep.info))
+                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, episode_timestep.info))
                         continue
-                    obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
+                    obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
 
                     if collect_with_pure_policy:
                         game_segments[env_id].store_search_stats(temp_visit_list, 0)
@@ -528,18 +544,19 @@ class MuZeroCollector(ISerialCollector):
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id], chance_dict[env_id]
+                            to_play_dict[env_id], chance_dict[env_id], timestep_dict[env_id]
                         )
                     else:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id]
+                            to_play_dict[env_id], timestep_dict[env_id]
                         )
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
+                    timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         chance_dict[env_id] = to_ndarray(obs['chance'])
 
@@ -605,8 +622,8 @@ class MuZeroCollector(ISerialCollector):
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
-                if timestep.done:
-                    reward = timestep.info['eval_episode_return']
+                if episode_timestep.done:
+                    reward = episode_timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,
                         'time': self._env_info[env_id]['time'],
@@ -670,6 +687,8 @@ class MuZeroCollector(ISerialCollector):
 
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+                        timestep_dict[env_id] = to_ndarray(init_obs[env_id].get('timestep', -1))
+
                         if self.policy_config.use_ture_chance_label_in_chance_encoder:
                             chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
@@ -716,11 +735,17 @@ class MuZeroCollector(ISerialCollector):
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
+
         # reduce data when enables DDP
         if self._world_size > 1:
+            # Before allreduce
+            self._logger.info(f"Rank {self._rank} before allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
             collected_step = allreduce_data(collected_step, 'sum')
             collected_episode = allreduce_data(collected_episode, 'sum')
             collected_duration = allreduce_data(collected_duration, 'sum')
+            # After allreduce
+            self._logger.info(f"Rank {self._rank} after allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
+
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode
         self._total_duration += collected_duration

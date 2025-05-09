@@ -5,13 +5,12 @@ from typing import Callable, Union, Dict, List
 from typing import Optional
 
 import dmc2gym
+# import gymnasium as gym
 import gym
-import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
-from ding.envs import BaseEnv, BaseEnvTimestep
-from ding.envs import WarpFrameWrapper, ScaledFloatFrameWrapper, ClipRewardWrapper, ActionRepeatWrapper, \
-    FrameStackWrapper
+from ding.envs import BaseEnv, BaseEnvTimestep, WarpFrameWrapper, ScaledFloatFrameWrapper, \
+    ClipRewardWrapper, ActionRepeatWrapper, FrameStackWrapper
 from ding.envs.common.common_function import affine_transform
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
@@ -257,7 +256,7 @@ class DMC2GymEnv(BaseEnv):
         self._init_flag = False
         self._replay_path = self._cfg.replay_path
 
-        self._observation_space = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["observation_space"](
+        self._observation_space_origin = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["observation_space"](
             from_pixels=self._cfg["from_pixels"],
             height=self._cfg["height"],
             width=self._cfg["width"],
@@ -302,7 +301,28 @@ class DMC2GymEnv(BaseEnv):
                 self._env = FrameStackWrapper(self._env, self._cfg['frame_stack'])
 
             # set the obs, action space of wrapped env
-            self._observation_space = self._env.observation_space
+            self._observation_space = gym.spaces.Dict({
+                'observation': self._observation_space_origin,
+                'action_mask': gym.spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=(1,),
+                    dtype=np.int8
+                ),
+                'to_play': gym.spaces.Box(
+                    low=-1,
+                    high=2,
+                    shape=(),
+                    dtype=np.int8
+                ),
+                'timestep': gym.spaces.Box(
+                    low=0,
+                    high=self._cfg.collect_max_episode_steps,
+                    shape=(),
+                    dtype=np.int32
+                ),
+            })
+
             self._action_space = self._env.action_space
 
             if self._replay_path is not None:
@@ -332,13 +352,13 @@ class DMC2GymEnv(BaseEnv):
             obs = obs['state']
 
         obs = to_ndarray(obs).astype(np.float32)
-        action_mask = None
 
-        self._current_step = 0
+        self._timestep = 0
         if self._save_replay_gif:
             self._frames = []
-
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+            
+        action_mask = -1
+        obs = {'observation': obs, 'action_mask': np.array(action_mask), 'to_play': np.array(-1), 'timestep': np.array(self._timestep)}
 
         return obs
 
@@ -372,10 +392,10 @@ class DMC2GymEnv(BaseEnv):
         #     action = np.where(action < -0.9500, -0.9999, action)
 
         obs, rew, done, info = self._env.step(action)
-        self._current_step += 1
+        self._timestep += 1
 
         # print(f'action: {action}, obs: {obs}, rew: {rew}, done: {done}, info: {info}')
-        # print(f'step {self._current_step}: action: {action}, rew: {rew}, done: {done}')
+        # print(f'step {self._timestep}: action: {action}, rew: {rew}, done: {done}')
 
         if self._cfg["from_pixels"]:
             obs = obs
@@ -389,6 +409,9 @@ class DMC2GymEnv(BaseEnv):
 
         if self._save_replay_gif:
             self._frames.append(image_obs)
+
+        if self._timestep > self._cfg.max_episode_steps:
+            done = True
 
         if done:
             info['eval_episode_return'] = self._eval_episode_return
@@ -405,8 +428,8 @@ class DMC2GymEnv(BaseEnv):
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
 
-        action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        action_mask = -1
+        obs = {'observation': obs, 'action_mask': np.array(action_mask), 'to_play': np.array(-1), 'timestep': np.array(self._timestep)}
 
         return BaseEnvTimestep(obs, rew, done, info)
 
