@@ -23,6 +23,7 @@ class XiGuaChess(BaseEnv):
             )
             for name in self.agents
         }
+        self._reward_space = spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.rewards = None
         self.chess_board = Chess()
 
@@ -37,6 +38,10 @@ class XiGuaChess(BaseEnv):
     @property
     def legal_actions(self):
         return self.chess_board.get_legal_moves(self.chess_board.get_current_player())
+
+    @property
+    def reward_space(self) -> spaces.Space:
+        return self._reward_space
 
     def reset(self):
         self.chess_board.reset()
@@ -61,3 +66,12 @@ class XiGuaChess(BaseEnv):
         elif mode == "image_savefile_mode":
             pass
         return None
+
+    def __repr__(self) -> str:
+        return "LightZero Xigua Chess Env"
+
+    def close(self) -> None:
+        pass
+
+    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
+        pass

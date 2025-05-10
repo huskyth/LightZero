@@ -264,7 +264,9 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs, root = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
+            action, mcts_probs, root = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset,
+                                                                          self._policy_value_fn,
+                                                                          self.collect_mcts_temperature, True)
 
             output[env_id] = {
                 'action': action,
@@ -387,6 +389,15 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = AnyGameEnv(dummy_any_game_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'awmchess':
+            from zoo.board_games.awmchess.envs.xi_gua_chess_env import XiGuaChess
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.chess.config.chess_alphazero_bot_mode_config import chess_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.awmchess.config.xigua_config import chess_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = XiGuaChess(chess_alphazero_config.env)
         else:
             raise NotImplementedError
 

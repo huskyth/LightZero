@@ -1,8 +1,10 @@
 import numpy as np
 
-from chess_board import ChessBoard
-from common import from_array_to_input_tensor, ARRAY_TO_IMAGE, board_to_torch_state, MOVE_LIST, MOVE_TO_INDEX_DICT
+from zoo.board_games.awmchess.chess.common import from_array_to_input_tensor, ARRAY_TO_IMAGE, board_to_torch_state, \
+    MOVE_LIST, MOVE_TO_INDEX_DICT
 import torch
+
+from zoo.board_games.awmchess.chess.chess_board import ChessBoard
 
 
 class Chess(ChessBoard):
@@ -76,6 +78,7 @@ class Chess(ChessBoard):
 
         rew = 1 if winner == exe_player else -1
         return self.get_observation(), rew, True, {}
+
 
 
 if __name__ == '__main__':

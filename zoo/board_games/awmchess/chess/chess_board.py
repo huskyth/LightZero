@@ -1,6 +1,6 @@
 import copy
 
-from common import GAME_MAP, \
+from zoo.board_games.awmchess.chess.common import GAME_MAP, \
     LENGTH_OF_BOARD, BLACK, WHITE, DISTANCE, get_neighbours, shiftOutChessman, \
     INDEX_TO_MOVE_DICT
 
