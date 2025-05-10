@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from gym import spaces
@@ -47,12 +49,14 @@ class XiGuaChess(BaseEnv):
         self.chess_board.reset()
         obs = self.chess_board.get_observation()
         action_mask = self.chess_board.get_numpy_mask()
-        return {'observation': obs, 'action_mask': action_mask}
+
+        return {'observation': obs, 'action_mask': action_mask, 'board': copy.deepcopy(self.chess_board.get_board()), }
 
     def step(self, action):
         obs, rew, done, info = self.chess_board.step(action)
         action_mask = self.chess_board.get_numpy_mask()
-        lightzero_obs_dict = {'observation': obs, 'action_mask': action_mask}
+        lightzero_obs_dict = {'observation': obs, 'action_mask': action_mask,
+                              'board': copy.deepcopy(self.chess_board.get_board()), }
         return BaseEnvTimestep(lightzero_obs_dict, rew, done, info)
 
     def render(self, mode: str = 'image_savefile_mode'):
