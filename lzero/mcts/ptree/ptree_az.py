@@ -12,6 +12,7 @@ Overview:
 
 import copy
 import math
+import pdb
 from typing import List, Tuple, Union, Callable, Type, Dict, Any
 
 import numpy as np
@@ -208,7 +209,6 @@ class MCTS(object):
 
         # Create a new root node for the MCTS search.
         root = Node()
-
         self.simulate_env.reset(
             start_player_index=state_config_for_simulate_env_reset.get('start_player_index', 0),
             init_state=state_config_for_simulate_env_reset.get('init_state', None),

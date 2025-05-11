@@ -2,7 +2,7 @@ import copy
 
 from zoo.board_games.awmchess.chess.common import GAME_MAP, \
     LENGTH_OF_BOARD, BLACK, WHITE, DISTANCE, get_neighbours, shiftOutChessman, \
-    INDEX_TO_MOVE_DICT
+    INDEX_TO_MOVE_DICT, MOVE_TO_INDEX_DICT
 
 
 class ChessBoard:
@@ -63,6 +63,12 @@ class ChessBoard:
                     continue
                 legal_moves_list.append((from_point_idx, to_point_idx))
         return legal_moves_list
+
+    def get_legal_moves_index(self, player):
+        assert player in [WHITE, BLACK]
+        legal_moves_list = self.get_legal_moves(player)
+        legal_moves_index_list = [MOVE_TO_INDEX_DICT[x] for x in legal_moves_list]
+        return legal_moves_index_list
 
     def execute_move(self, move, color):
         if isinstance(move, int):

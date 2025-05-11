@@ -59,6 +59,9 @@ class Chess(ChessBoard):
     def get_observation(self):
         return board_to_torch_state(self.get_board(), self.get_current_player(), self.last_action)
 
+    def get_numpy_observation(self):
+        return board_to_torch_state(self.get_board(), self.get_current_player(), self.last_action).cpu().numpy()
+
     def get_action_mask(self):
         legal_moves_list = self.get_legal_moves(self.get_current_player())
         ret_mask = torch.zeros(len(MOVE_LIST))
@@ -78,7 +81,6 @@ class Chess(ChessBoard):
 
         rew = 1 if winner == exe_player else -1
         return self.get_observation(), rew, True, {}
-
 
 
 if __name__ == '__main__':

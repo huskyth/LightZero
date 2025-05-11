@@ -1,4 +1,5 @@
 import copy
+import pdb
 
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
@@ -28,6 +29,7 @@ class XiGuaChess(BaseEnv):
         self._reward_space = spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.rewards = None
         self.chess_board = Chess()
+        self.battle_mode_in_simulation_env = 'self_play_mode'
 
     @property
     def action_space(self):
@@ -39,24 +41,28 @@ class XiGuaChess(BaseEnv):
 
     @property
     def legal_actions(self):
-        return self.chess_board.get_legal_moves(self.chess_board.get_current_player())
+        return self.chess_board.get_legal_moves_index(self.chess_board.get_current_player())
 
     @property
     def reward_space(self) -> spaces.Space:
         return self._reward_space
 
-    def reset(self):
-        self.chess_board.reset()
+    def reset(self, start_player_index=1, init_state=None,
+              katago_policy_init=False,
+              katago_game_state=None):
+        self.chess_board.reset(start_player_index)
         obs = self.chess_board.get_observation()
         action_mask = self.chess_board.get_numpy_mask()
 
-        return {'observation': obs, 'action_mask': action_mask, 'board': copy.deepcopy(self.chess_board.get_board()), }
+        return {'observation': obs, 'action_mask': action_mask, 'board': copy.deepcopy(self.chess_board.get_board()),
+                'current_player_index': self.chess_board.get_current_player()}
 
     def step(self, action):
         obs, rew, done, info = self.chess_board.step(action)
         action_mask = self.chess_board.get_numpy_mask()
         lightzero_obs_dict = {'observation': obs, 'action_mask': action_mask,
-                              'board': copy.deepcopy(self.chess_board.get_board()), }
+                              'board': copy.deepcopy(self.chess_board.get_board()),
+                              'current_player_index': self.chess_board.get_current_player(), }
         return BaseEnvTimestep(lightzero_obs_dict, rew, done, info)
 
     def render(self, mode: str = 'image_savefile_mode'):
@@ -70,6 +76,10 @@ class XiGuaChess(BaseEnv):
         elif mode == "image_savefile_mode":
             pass
         return None
+
+    def current_state(self):
+        obs, scale_obs = self.chess_board.get_numpy_observation(), self.chess_board.get_numpy_observation()
+        return obs, scale_obs
 
     def __repr__(self) -> str:
         return "LightZero Xigua Chess Env"

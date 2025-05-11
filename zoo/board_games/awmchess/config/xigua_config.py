@@ -52,7 +52,7 @@ chess_alphazero_config = dict(
         simulation_env_config_type='self_play',
         # ==============================================================
         model=dict(
-            observation_shape=(7, 7, 3),
+            observation_shape=(3, 7, 7),
             action_space_size=int(72),
             # TODO: for debug
             num_res_blocks=1,

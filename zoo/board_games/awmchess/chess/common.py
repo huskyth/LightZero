@@ -263,7 +263,7 @@ def board_to_torch_state(board, player, last_action):
         first, second = last_action
         first, second = ARRAY_TO_IMAGE[second]
         state2[0][0][first][second] = 1
-    return torch.cat([state0, state1, state2], dim=1)
+    return torch.cat([state0, state1, state2], dim=1)[0]
 
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@ from ding.utils.data import default_collate
 from easydict import EasyDict
 
 from lzero.policy import configure_optimizers
+import pdb
 
 
 @POLICY_REGISTRY.register('alphazero')
