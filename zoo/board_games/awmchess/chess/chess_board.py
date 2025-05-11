@@ -1,5 +1,7 @@
 import copy
 
+import numpy as np
+
 from zoo.board_games.awmchess.chess.common import GAME_MAP, \
     LENGTH_OF_BOARD, BLACK, WHITE, DISTANCE, get_neighbours, shiftOutChessman, \
     INDEX_TO_MOVE_DICT, MOVE_TO_INDEX_DICT
@@ -73,6 +75,8 @@ class ChessBoard:
     def execute_move(self, move, color):
         if isinstance(move, int):
             move = INDEX_TO_MOVE_DICT[move]
+        elif isinstance(move, np.ndarray):
+            move = INDEX_TO_MOVE_DICT[move.item()]
         from_int, to_int = move
         assert color == WHITE or color == BLACK
         assert self.pointStatus[from_int] == color

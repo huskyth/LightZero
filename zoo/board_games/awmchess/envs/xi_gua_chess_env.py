@@ -16,7 +16,7 @@ class XiGuaChess(BaseEnv):
         self.cfg = cfg
         self._init_flag = False
         self.agents = [f"player_{i + 1}" for i in range(2)]
-        self._action_spaces = {name: spaces.Discrete(len(MOVE_LIST)) for name in self.agents}
+        self._action_spaces = spaces.Discrete(len(MOVE_LIST))
         self._observation_spaces = {
             name: spaces.Dict(
                 {
@@ -80,6 +80,24 @@ class XiGuaChess(BaseEnv):
     def current_state(self):
         obs, scale_obs = self.chess_board.get_numpy_observation(), self.chess_board.get_numpy_observation()
         return obs, scale_obs
+
+    def get_done_winner(self):
+        """
+        Overview:
+            Check if the game is over and determine the winning player. Returns 'done' and 'winner'.
+        Returns:
+            - outputs (:obj:`Tuple`): A tuple containing 'done' and 'winner'
+                - If player 1 wins, 'done' = True, 'winner' = 1
+                - If player 2 wins, 'done' = True, 'winner' = 2
+                - If it's a draw, 'done' = True, 'winner' = -1
+                - If the game is not over, 'done' = False, 'winner' = -1
+        """
+
+        winner_ = self.chess_board.check_winner()
+        winner = -1 if winner_ is None else winner_
+        done = True if winner_ is not None else False
+
+        return done, winner
 
     def __repr__(self) -> str:
         return "LightZero Xigua Chess Env"
