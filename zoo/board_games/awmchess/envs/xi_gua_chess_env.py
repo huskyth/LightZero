@@ -1,4 +1,5 @@
 import copy
+import logging
 import pdb
 
 import numpy as np
@@ -30,6 +31,7 @@ class XiGuaChess(BaseEnv):
         self.rewards = None
         self.chess_board = Chess()
         self.battle_mode_in_simulation_env = 'self_play_mode'
+        self.players = [1, 2]
 
     @property
     def action_space(self):
@@ -47,22 +49,49 @@ class XiGuaChess(BaseEnv):
     def reward_space(self) -> spaces.Space:
         return self._reward_space
 
-    def reset(self, start_player_index=1, init_state=None,
+    @property
+    def current_player(self):
+        return self._current_player
+
+    @property
+    def current_player_index(self):
+        return 0 if self._current_player == 1 else 1
+
+    @property
+    def next_player(self):
+        return self.players[0] if self.current_player == self.players[1] else self.players[1]
+
+    @current_player.setter
+    def current_player(self, value):
+        self._current_player = value
+
+    def reset(self, start_player_index=0, init_state=None,
               katago_policy_init=False,
               katago_game_state=None):
-        self.chess_board.reset(start_player_index)
+        # TODO://第一个为1，第二个为-1
+        self.chess_board.reset(1 if start_player_index == 0 else -1)
         obs = self.chess_board.get_observation()
         action_mask = self.chess_board.get_numpy_mask()
-
+        self._current_player = self.players[start_player_index]
         return {'observation': obs, 'action_mask': action_mask, 'board': copy.deepcopy(self.chess_board.get_board()),
-                'current_player_index': self.chess_board.get_current_player()}
+                'current_player_index': start_player_index, 'to_play': self.current_player}
 
     def step(self, action):
+        if isinstance(action, np.ndarray):
+            action = int(action)
+        if action not in self.legal_actions:
+            # TODO:// 检查为啥会一直没命中
+            logging.warning(
+                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+                f"Now we randomly choice a action from self.legal_actions."
+            )
+            action = int(np.random.choice(self.legal_actions))
         obs, rew, done, info = self.chess_board.step(action)
         action_mask = self.chess_board.get_numpy_mask()
         lightzero_obs_dict = {'observation': obs, 'action_mask': action_mask,
                               'board': copy.deepcopy(self.chess_board.get_board()),
-                              'current_player_index': self.chess_board.get_current_player(), }
+                              'current_player_index': 1 - self.current_player_index, 'to_play': self.next_player}
+        self.current_player = self.next_player
         return BaseEnvTimestep(lightzero_obs_dict, rew, done, info)
 
     def render(self, mode: str = 'image_savefile_mode'):
