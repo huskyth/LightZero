@@ -4,7 +4,7 @@ import numpy as np
 
 from zoo.board_games.awmchess.chess.common import GAME_MAP, \
     LENGTH_OF_BOARD, BLACK, WHITE, DISTANCE, get_neighbours, shiftOutChessman, \
-    INDEX_TO_MOVE_DICT, MOVE_TO_INDEX_DICT
+    INDEX_TO_MOVE_DICT, MOVE_TO_INDEX_DICT, compute_move
 
 
 class ChessBoard:
@@ -111,3 +111,8 @@ class ChessBoard:
                 winner = BLACK
 
         return winner
+
+    def get_rule_move(self, point_status, current_player):
+        temp_point_status = copy.deepcopy(point_status)
+        best_move, max_score = compute_move(temp_point_status, 1, current_player)
+        return MOVE_TO_INDEX_DICT[best_move]

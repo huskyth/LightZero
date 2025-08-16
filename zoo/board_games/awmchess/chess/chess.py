@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 
 from zoo.board_games.awmchess.chess.common import from_array_to_input_tensor, ARRAY_TO_IMAGE, board_to_torch_state, \
@@ -49,10 +51,13 @@ class Chess(ChessBoard):
     def get_current_player(self):
         return self.current_player
 
-    def reset(self, reset_player=1):
+    def reset(self, reset_player=1, init_state=None):
         self.init_point_status()
         self.current_player = reset_player
         self.last_action = (-1, -1)
+        if init_state:
+            assert isinstance(init_state, list)
+            self.pointStatus = copy.deepcopy(init_state)
 
         return self.get_observation()
 

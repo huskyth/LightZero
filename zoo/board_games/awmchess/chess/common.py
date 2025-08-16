@@ -9,6 +9,7 @@ import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
 import torch
+import logging
 
 
 def create_directory(path):
@@ -65,6 +66,8 @@ CHESSMAN_HEIGHT = 20
 SCREEN_WIDTH = 580
 SCREEN_HEIGHT = 580
 
+DEEPEST_LEVEL = 3
+
 
 def from_array_to_input_tensor(numpy_array):
     if isinstance(numpy_array, list):
@@ -87,7 +90,7 @@ def read_image(path):
     return cv2.imread(path)
 
 
-def check(chessman, distance, pointStatus, checkedChessmen):
+def check(chessman, distance, point_status, checkedChessmen):
     checkedChessmen.append(chessman)
     dead = True
     neighboorChessmen = get_neighbours(chessman, distance)
@@ -95,12 +98,12 @@ def check(chessman, distance, pointStatus, checkedChessmen):
         if neighboorChessman not in checkedChessmen:
             # if the neighboor is the same color, check the neighboor to find a
             # empty neighboor
-            if pointStatus[neighboorChessman] == pointStatus[chessman]:
+            if point_status[neighboorChessman] == point_status[chessman]:
                 dead = check(neighboorChessman, distance,
-                             pointStatus, checkedChessmen)
+                             point_status, checkedChessmen)
                 if dead == False:
                     return dead
-            elif pointStatus[neighboorChessman] == 0:
+            elif point_status[neighboorChessman] == 0:
                 dead = False
                 return dead
             else:
@@ -108,24 +111,24 @@ def check(chessman, distance, pointStatus, checkedChessmen):
     return dead
 
 
-def shiftOutChessman(pointStatus, distance):
+def shiftOutChessman(point_status, distance):
     deadChessmen = []
-    bakPointStatus = copy.deepcopy(pointStatus)
-    for chessman, color in enumerate(pointStatus):
+    bakPointStatus = copy.deepcopy(point_status)
+    for chessman, color in enumerate(point_status):
         checkedChessmen = []
         dead = True
         if color != 0:
             # pdb.set_trace()
-            dead = check(chessman, distance, pointStatus, checkedChessmen)
+            dead = check(chessman, distance, point_status, checkedChessmen)
         else:
             pass
         if dead:
             deadChessmen.append(chessman)
-        pointStatus = bakPointStatus
+        point_status = bakPointStatus
     for eachDeadChessman in deadChessmen:
-        pointStatus[eachDeadChessman] = 0
+        point_status[eachDeadChessman] = 0
 
-    return pointStatus
+    return point_status
 
 
 def write_video(frame_list, file_name, fps=0.5):
@@ -264,6 +267,70 @@ def board_to_torch_state(board, player, last_action):
         first, second = ARRAY_TO_IMAGE[second]
         state2[0][0][first][second] = 1
     return torch.cat([state0, state1, state2], dim=1)[0]
+
+
+def get_score(point_status):
+    score = 0
+    scoreLevel = [1, 2, 4, 6]
+    black = [x for x in DISTANCE if x == BLACK]
+    # if chessman was eaten, sub 8 score for each one
+    score -= 8 * (6 - len(black))
+    for chessman, color in enumerate(point_status):
+        advantg = 0
+        disadvtg = 0
+        neighboors = get_neighbours(chessman, DISTANCE)
+        for eachNeighboor in neighboors:
+            # computer use black chessman as default
+            if point_status[eachNeighboor] == BLACK and color == WHITE:
+                advantg += 1
+                score += scoreLevel[advantg - 1]
+            elif point_status[eachNeighboor] == WHITE and color == BLACK:
+                disadvtg += 1
+                score -= scoreLevel[disadvtg - 1]
+            else:
+                pass
+            # unnecessary
+            '''
+            elif color == WHITE:
+                if point_status[eachNeighboor] == BLACK:
+                    score += 2
+                elif point_status[eachNeighboor] == WHITE:
+                    score -= 2
+            '''
+    return score
+
+
+def compute_move(point_status, level, self_color):
+    move = []
+    max_score = -48
+    best_move = None
+    assert self_color in [WHITE, BLACK]
+
+    if level > DEEPEST_LEVEL:
+        logging.warning("level 超过最深level，返回为空")
+        score = get_score(point_status)
+        return [], score
+
+    for chessman, color in enumerate(point_status):
+        if color == self_color:
+            for neighbor_chessman in get_neighbours(chessman, DISTANCE):
+                if point_status[neighbor_chessman] == 0:
+                    move.append((chessman, neighbor_chessman))
+    if not move:
+        return [], -49
+    bak_point_status = copy.deepcopy(point_status)
+    for each_move in move:
+        point_status[each_move[1]] = self_color
+        point_status[each_move[0]] = 0
+        point_status = shiftOutChessman(point_status, DISTANCE)
+
+        _, score = compute_move(point_status, level + 1, -1 * self_color)
+        if score > max_score:
+            max_score = score
+            best_move = each_move
+
+        point_status = copy.deepcopy(bak_point_status)
+    return best_move, max_score
 
 
 if __name__ == '__main__':

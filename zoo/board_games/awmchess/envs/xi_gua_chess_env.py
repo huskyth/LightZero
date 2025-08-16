@@ -4,15 +4,34 @@ import pdb
 
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
+from easydict import EasyDict
 from gym import spaces
 
 from zoo.board_games.awmchess.chess.chess import Chess
 from zoo.board_games.awmchess.chess.common import MOVE_LIST, draw_chessmen
 from ding.utils import ENV_REGISTRY
 
+from zoo.board_games.awmchess.envs.rule_bot import XiGuaRuleBot
+from zoo.board_games.mcts_bot import MCTSBot
+
 
 @ENV_REGISTRY.register('xigua_env')
 class XiGuaChess(BaseEnv):
+    config = dict(
+        # (str) The name of the environment registered in the environment registry.
+        env_id="XiGuaChess",
+        # (str) The mode of the environment when take a step.
+        battle_mode='self_play_mode',
+        # (float) The probability that a random agent is used instead of the learning agent.
+        prob_random_agent=0,
+        # (float) The probability that an expert agent(the bot) is used instead of the learning agent.
+        prob_expert_agent=0,
+        # (str) The type of the bot of the environment.
+        bot_action_type='rule',
+        # (float) The probability that a random action will be taken when calling the bot.
+        prob_random_action_in_bot=0.,
+    )
+
     def __init__(self, cfg=None):
         self.cfg = cfg
         self._init_flag = False
@@ -29,9 +48,32 @@ class XiGuaChess(BaseEnv):
         }
         self._reward_space = spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.rewards = None
-        self.chess_board = Chess()
-        self.battle_mode_in_simulation_env = 'self_play_mode'
+
+        self.battle_mode = cfg.battle_mode
+        assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         self.players = [1, 2]
+
+        # Set some randomness for selecting action.
+        self.prob_random_agent = cfg.prob_random_agent
+        self.prob_expert_agent = cfg.prob_expert_agent
+        assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
+                self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
+            f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
+
+        self.chess_board = Chess()
+
+        self._current_player = 1
+
+        self.bot_action_type = cfg.bot_action_type
+        self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
+        if self.bot_action_type == 'mcts':
+            cfg_temp = EasyDict(cfg.copy())
+            cfg_temp.save_replay = False
+            cfg_temp.bot_action_type = None
+            env_mcts = XiGuaChess(EasyDict(cfg_temp))
+            self.mcts_bot = MCTSBot(env_mcts, 'mcts_player', 50)
+        elif self.bot_action_type == 'rule':
+            self.rule_bot = XiGuaRuleBot(self, self._current_player)
 
     @property
     def action_space(self):
@@ -58,6 +100,10 @@ class XiGuaChess(BaseEnv):
         return 0 if self._current_player == 1 else 1
 
     @property
+    def current_player_adapter(self):
+        return 1 if self._current_player == 1 else -1
+
+    @property
     def next_player(self):
         return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
@@ -69,12 +115,22 @@ class XiGuaChess(BaseEnv):
               katago_policy_init=False,
               katago_game_state=None):
         # TODO://第一个为1，第二个为-1
-        self.chess_board.reset(1 if start_player_index == 0 else -1)
+        self.chess_board.reset(1 if start_player_index == 0 else -1, init_state)
+
         obs = self.chess_board.get_observation()
         action_mask = self.chess_board.get_numpy_mask()
         self._current_player = self.players[start_player_index]
         return {'observation': obs, 'action_mask': action_mask, 'board': copy.deepcopy(self.chess_board.get_board()),
                 'current_player_index': start_player_index, 'to_play': self.current_player}
+
+    def bot_action(self) -> int:
+        if np.random.rand() < self.prob_random_action_in_bot:
+            return self.random_action()
+        else:
+            if self.bot_action_type == 'rule':
+                return self.rule_bot.get_rule_bot_action(self.chess_board.pointStatus, self.current_player_adapter)
+            elif self.bot_action_type == 'mcts':
+                return self.mcts_bot.get_actions(self.chess_board.pointStatus, player_index=self.current_player_index)
 
     def step(self, action):
         if isinstance(action, np.ndarray):
